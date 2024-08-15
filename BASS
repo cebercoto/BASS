@@ -1,0 +1,890 @@
+#!/bin/bash
+echo "########################################################"
+echo "#                     BASS v0.94                       #"
+echo "#   Writen by Ezequiel Martin (cebercoto@gmail.com)    #"
+echo "#                                                      #"
+echo "#                  November 17th 2021                  #"
+echo "#                                                      #"
+echo "#  This Bash script uses the following software under  #"
+echo "#     GNU Public license v2: vim, vcftools, R and      #"
+echo "#                      annovar                         #"
+echo "#                                                      #"
+echo "#            This Script will only work on             #"
+echo "# whisperwind, sunstrider or zuljin without adaptation #"
+echo "#                                                      #"
+echo "#                       Help:                          #"
+echo "#                ceberSCORE --help TRUE                #"
+echo "#                                                      #"
+echo "########################################################"
+## Definition of Variables
+MODE="individual"
+TARGET="NULL"
+MOTHER="NULL"
+FATHER="NULL"
+MOTHERAFF="NULL"
+FATHERAFF="NULL"
+SIB1="NULL"
+SIB2="NULL"
+SIB3="NULL"
+SIB4="NULL"
+SIB1AFF="NULL"
+SIB2AFF="NULL"
+SIB3AFF="NULL"
+SIB4AFF="NULL"
+HELP="false"
+MODEL="recessive"
+BUILD="hg38"
+HOMOZ="true"
+DROP="false"
+MAFFILTER="1"
+DPFILTER="10"
+TRANSCRIPTS="true"
+BAM="NULL"
+METASCORE="0.7"
+SOMATIC="false"
+SOMATICFILE="NULL"
+MULTIMAPS="true"
+## Options Section
+while [[ $# > 1 ]]
+do
+key="$1"
+case $key in
+	-H|--help)
+	HELP=$2
+	shift
+	;;
+	--target)
+	TARGET=$2
+	echo -e `date +[%D-%R]` "\tTarget set to $2" | tee -a ${TARGET}.log
+	shift
+	;;
+	-M|--mode)
+	MODE=$2
+	echo -e `date +[%D-%R]` "\tMode set to $2" | tee -a ${TARGET}.log
+	shift
+	;;
+	--mother)
+	MOTHER=$2
+	echo -e `date +[%D-%R]` "\tMother set to $2" | tee -a ${TARGET}.log
+	shift
+	;;
+	--father)
+	FATHER=$2
+	echo -e `date +[%D-%R]` "\tFather set to $2" | tee -a ${TARGET}.log
+	shift
+	;;
+	--motheraff)
+	MOTHERAFF=$2
+	echo -e `date +[%D-%R]` "\tAffected mother set to $2" | tee -a ${TARGET}.log
+	shift
+	;;
+	--fatheraff)
+	FATHERAFF=$2
+	echo -e `date +[%D-%R]` "\tAffected father set to $2" | tee -a ${TARGET}.log
+	shift
+	;;
+	--sib1)
+	SIB1=$2
+	echo -e `date +[%D-%R]` "\t1st sibling set to $2" | tee -a ${TARGET}.log
+	shift
+	;;
+	--sib2)
+	SIB2=$2
+	echo -e `date +[%D-%R]` "\t2nd sibling set to $2" | tee -a ${TARGET}.log
+	shift
+	;;
+	--sib3)
+	SIB3=$2
+	echo -e `date +[%D-%R]` "\t3rd sibling set to $2" | tee -a ${TARGET}.log
+	shift
+	;;
+	--sib4)
+	SIB4=$2
+	echo -e `date +[%D-%R]` "\t4th sibling set to $2" | tee -a ${TARGET}.log
+	shift
+	;;
+	--sib1aff)
+	SIB1AFF=$2
+	echo -e `date +[%D-%R]` "\t1st affected sibling set to $2" | tee -a ${TARGET}.log
+	shift
+	;;
+	--sib2aff)
+	SIB2AFF=$2
+	echo -e `date +[%D-%R]` "\t2ns affected sibling set to $2" | tee -a ${TARGET}.log
+	shift
+	;;
+	--sib3aff)
+	SIB3AFF=$2
+	echo -e `date +[%D-%R]` "\t3rd affected sibling set to $2" | tee -a ${TARGET}.log
+	shift
+	;;
+	--sib4aff)
+	SIB4AFF=$2
+	echo -e `date +[%D-%R]` "\t4th affected sibling set to $2" | tee -a ${TARGET}.log
+	shift
+	;;
+	-m|--model)
+	echo -e `date +[%D-%R]` "\tModel set to $2" | tee -a ${TARGET}.log
+	MODEL=$2
+	shift
+	;;
+	-b|--build)
+	echo -e `date +[%D-%R]` "\tGenome build set to $2" | tee -a ${TARGET}.log
+	BUILD=$2
+	shift
+	;;
+	--homozyg)
+	echo -e `date +[%D-%R]` "\tSetting homozygosity run analysis to $2" | tee -a ${TARGET}.log
+	HOMOZ=$2
+	shift
+	;;
+	--drop)
+	echo -e `date +[%D-%R]` "\tSetting drop of non-scored variants to $2" | tee -a ${TARGET}.log
+	DROP=$2
+	shift
+	;;
+	--MAF)
+	echo -e `date +[%D-%R]` "\tFiltering results for MAF $2" | tee -a ${TARGET}.log
+	MAFFILTER=$2
+	shift
+	;;
+    --DP)
+    echo -e `date +[%D-%R]` "\tFiltering VC for DP $2" | tee -a ${TARGET}.log
+    DPFILTER=$2
+    shift
+    ;;
+	-t|--transcripts)
+	echo -e `date +[%D-%R]` "\tAlternative transcript processing set to $2" | tee -a ${TARGET}.log
+	TRANSCRIPTS=$2
+	shift
+	;;
+	-B|--bam)
+	echo -e `date +[%D-%R]` "\tBam file is $2" | tee -a ${TARGET}.log
+	BAM=$2
+	shift
+	;;
+	--bass-score)
+	echo -e `date +[%D-%R]` "\tBASS Score threshold for meta-analysis set to $2" | tee -a ${TARGET}.log
+	METASCORE=$2
+	shift
+	;;
+	--somatic)
+	echo -e `date +[%D-%R]` "\tAnnotating results from somatic variant calls" | tee -a ${LIST}.log
+    SOMATIC=${2}
+    shift
+    ;;
+    --somatic-file)
+    echo -e `date +[%D-%R]` "\tFile specifing the pairs of germline/tumor set to ${2}" | tee -a ${LIST}.log
+    SOMATICFILE=${2}
+    shift
+    ;;
+	--multimaps)
+    echo -e `date +[%D-%R]` "\tMultimaps filtering set to ${2}" | tee -a ${LIST}.log
+    MULTIMAPS=${2}
+    shift
+    ;;
+esac
+shift
+done
+## Help description
+if [ $HELP = "true" ]; then
+    echo "Available options are:"
+    echo ""
+	echo "-H/--help          Display this help menu"
+	echo "-M/--mode          Mode for BASS to operate in. individual, gwas and meta are possible values (default is individual)"
+	echo "--target           the VCF/avinput file to annotate (Mandatory, Default=NULL)"
+	echo "--mother           Target's (unaffected) mother in VCF format (Dafault=NULL)"
+	echo "--father           Target's (unaffected) father in VCF format (Default=NULL)"
+	echo "--motheraff        Target's (affected) mother in VCF format (Default=NULL)"
+	echo "--fatheraff        Target's (affected) father in VCF format (Default=NULL)"
+	echo "--sib1             Target's (unaffected) sibling in VCF format (Default=NULL)"
+	echo "--sib2             Target's (unaffected) sibling in VCF format (Default=NULL)"
+	echo "--sib3             Target's (unaffected) sibling in VCF format (Default=NULL)"
+	echo "--sib4             Target's (unaffected) sibling in VCF format (Default=NULL)"
+	echo "--sib1aff          Target's (affected) sibling in VCF format (Default=NULL)"
+	echo "--sib2aff          Target's (affected) sibling in VCF format (Default=NULL)"
+	echo "--sib3aff          Target's (affected) sibling in VCF format (Default=NULL)"
+	echo "--sib4aff          Target's (affected) sibling in VCF format (Default=NULL)"
+	echo "-m/--model         Trait inheritance model: recessive, dominant or all are accepted values (recessive by default)"
+	echo "-b/--build         Build of the genome, hg19 or hg38 (hg38 is default)"
+	echo "--homozyg          Whether to score homozygous regions or not (true/false, default is true)"
+	echo "--drop             Drop all variants which have not been scored from the output file (true/false, default is false)"
+	echo "--MAF              MAF threshold with which to filter the data (default is 1)"
+	echo "--DP               DP threshold with which to filter the data (default is 10)"
+	echo "-t/--transcripts   Whether to score each variant in each possible transcript it is found on or only in the longest one (Default=true)"
+	echo "-B/--bam           Bam file for the individual for multimap calculation (Default=NULL)"
+	echo "--bass-score       Threshold BASS score upon which to perform meta-analysis of individual scores in meta mode (Default=0.7)"
+	echo "--somatic          Whether to use the somatic pipeline for annotation or not, a germline/tumour pairs file needs to be provided (Default=false)"
+    echo "--somatic-file     A file specifing the pairs of germline/tumour to use with the somatic variant annotation pipeline (Defualt=NULL)"
+	echo "--multomaps        whether to calculate multimap percentage of reads for each variant or not (Default=true)"
+    exit 
+fi
+## Options Check
+if [ ${BUILD} = "hg38_2" ]; then
+	BUILD="hg38"
+fi
+if [ ${BUILD} = "hg38.bwa" ]; then
+	BUILD="hg38"
+fi
+if [ ${BUILD} = "hg38.bwa2" ]; then
+	BUILD="hg38"
+fi
+if [ ${BUILD} = "hg38.GATK" ]; then
+	BUILD="hg38"
+fi
+if [ ${BUILD} = "hg38.GDC" ]; then
+	BUILD="hg38"
+fi
+if [ ${BUILD} = "hg38.NCBI" ]; then
+	BUILD="hg38"
+fi
+if [ ${BUILD} = "hg38.p9" ]; then
+	BUILD="hg38"
+fi
+if [ ${BUILD} = "hg38.p11" ]; then
+	BUILD="hg38"
+fi
+## Creating Temp Files
+if [ -e .Score_${TARGET}_TempFiles ]; then
+        rm -r .Score_${TARGET}_TempFiles
+fi
+mkdir .Score_${TARGET}_TempFiles
+cd .Score_${TARGET}_TempFiles
+IFS=$'\n'
+if [ ${SOMATIC} = 'false' ]; then
+	## all the germline pipelines
+	## Prepare target file
+	if [ ${MODE} = "individual" ]; then
+		cp ../${TARGET}.vcf ${TARGET}.Analysis.vcf
+		## Filter for DP
+		vcftools --vcf ${TARGET}.Analysis.vcf --min-meanDP ${DPFILTER} --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+		mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+		## Correction of homozigosity runs
+        if [ ${HOMOZ} = 'true' ]; then
+            echo -e `date +[%D-%R]` "\tCalculating homozygosity runs" | tee -a ../${TARGET}.log
+            vcftools --vcf ${TARGET}.Analysis.vcf --plink --out ${TARGET} > /dev/null 2>&1
+            plink1.90 --allow-extra-chr --file ${TARGET} --homozyg --out ${TARGET} > /dev/null 2>&1
+            cp ${TARGET}.hom ${TARGET}.hom.untouched
+            sed -i -e "s/\s\+\S\+\s\+\S\+\s\+\S\+\s\+\(\S\+\)\s\+\S\+\s\+\S\+\s\+\(\S\+\)\s\+\(\S\+\)\s\+\(\S\+\).\+/\1\t\2\t\3\t\4/" ${TARGET}.hom > /dev/null 2>&1
+            tail -n +2 ${TARGET}.hom > ${TARGET}.hom.bed
+            sed -i -e "s/\(\S\+\)/chr\1/" ${TARGET}.hom.bed
+            sed -i -e "s/chr23/chrX/" ${TARGET}.hom.bed
+            sed -i -e "s/chr24/chrY/" ${TARGET}.hom.bed
+            echo -e "ChrHom\tBPHom\tCorrHom" > ${TARGET}.homozygous.txt 
+            NHOMOZREGIONS=$(wc -l ${TARGET}.hom.bed | awk '{print $1}')
+            echo -e `date +[%D-%R]` "\tDetected ${NHOMOZREGIONS} regions of homozygosity" | tee -a ../${TARGET}.log
+            for i in $(seq 1 ${NHOMOZREGIONS}); do
+                echo -ne "\rProcessing ROH ${i} of ${NHOMOZREGIONS}"
+                head -n ${i} ${TARGET}.hom.bed | tail -n 1 > ${i}.bed
+                HOMOZSIZE=$(awk '{print $4}' ${i}.bed)
+                bedtools intersect -a ${TARGET}.Analysis.vcf -b ${i}.bed > ${i}.homozygous
+                sed -e "s/\(\S\+\s\+\S\+\).\+/\1\t${HOMOZSIZE}/" ${i}.homozygous >> ${TARGET}.homozygous.txt
+            done
+            echo -e "\r"
+            echo -e `date +[%D-%R]` "\tROH Calculations Finished" | tee -a ../${TARGET}.log
+        else
+            echo -e "ChrHom\tBPHom\tCorrHom" > ${TARGET}.homozygous.txt
+        fi
+		## Recessive Model
+		if [ ${MODEL} = 'recessive' ]; then
+			echo -e `date +[%D-%R]` "\tThe model is ${MODEL}" | tee -a ../${TARGET}.log
+            if [ -e ../${MOTHER}.vcf  ]; then
+                echo -e `date +[%D-%R]` "\tUsing ${MOTHER}.vcf as mother" | tee -a ../${TARGET}.log
+                vcftools --vcf ../${MOTHER}.vcf --non-ref-ac 1 --max-non-ref-ac 1 --recode --out ${MOTHER}.het > /dev/null 2>&1
+                mv ${MOTHER}.het.recode.vcf ${MOTHER}.het.vcf
+                less ${MOTHER}.het.vcf | grep -v "#" > ${MOTHER}.het.list
+                vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${MOTHER}.het.list > /dev/null 2>&1
+                vcftools --vcf ${TARGET}.Analysis.vcf --snps ${MOTHER}.het.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+                mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+            fi
+			if [ -e ../${MOTHERAFF}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${MOTHERAFF}.vcf as AFFECTED mother" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${MOTHERAFF}.vcf --non-ref-ac 2 --max-non-ref-ac 2 --recode --out ${MOTHERAFF}.het > /dev/null 2>&1
+				mv ${MOTHERAFF}.het.recode.vcf ${MOTHERAFF}.hom.vcf
+				less ${MOTHERAFF}.hom.vcf | grep -v "#" > ${MOTHERAFF}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${MOTHERAFF}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --snps ${MOTHERAFF}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+            if [ -e ../${FATHER}.vcf  ]; then
+                echo -e `date +[%D-%R]` "\tUsing ${FATHER}.vcf as father" | tee -a ../${TARGET}.log
+                vcftools --vcf ../${FATHER}.vcf --non-ref-ac 1 --max-non-ref-ac 1 --recode --out ${FATHER}.het > /dev/null 2>&1
+                mv ${FATHER}.het.recode.vcf ${FATHER}.het.vcf
+                less ${FATHER}.het.vcf | grep -v "#" > ${FATHER}.het.list
+                vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${FATHER}.het.list > /dev/null 2>&1
+                vcftools --vcf ${TARGET}.Analysis.vcf --snps ${FATHER}.het.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+                mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+            fi
+			if [ -e ../${FATHERAFF}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${FATHERAFF}.vcf as AFFECTED father" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${FATHERAFF}.vcf --non-ref-ac 2 --max-non-ref-ac 2 --recode --out ${FATHERAFF}.hom > /dev/null 2>&1
+				mv ${FATHERAFF}.hom.recode.vcf ${FATHERAFF}.hom.vcf
+				less ${FATHERAFF}.hom.vcf | grep -v "#" > ${FATHERAFF}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${FATHERAFF}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --snps ${FATHERAFF}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${SIB1}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB1} as unaffected sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB1}.vcf --non-ref-ac 2 --max-non-ref-ac 2 --recode --out ${SIB1}.hom > /dev/null 2>&1
+				mv ${SIB1}.hom.recode.vcf ${SIB1}.hom.vcf
+				less ${SIB1}.hom.vcf | grep -v "#" > ${SIB1}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB1}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --exclude ${SIB1}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${SIB2}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB2} as unaffected sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB2}.vcf --non-ref-ac 2 --max-non-ref-ac 2 --recode --out ${SIB2}.hom > /dev/null 2>&1
+				mv ${SIB2}.hom.recode.vcf ${SIB2}.hom.vcf
+				less ${SIB2}.hom.vcf | grep -v "#" > ${SIB2}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB2}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --exclude ${SIB2}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${SIB3}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB3} as unaffected sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB3}.vcf --non-ref-ac 2 --max-non-ref-ac 2 --recode --out ${SIB3}.hom > /dev/null 2>&1
+				mv ${SIB3}.hom.recode.vcf ${SIB3}.hom.vcf
+				less ${SIB3}.hom.vcf | grep -v "#" > ${SIB3}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB3}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --exclude ${SIB3}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${SIB4}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB4} as unaffected sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB4}.vcf --non-ref-ac 2 --max-non-ref-ac 2 --recode --out ${SIB4}.hom > /dev/null 2>&1
+				mv ${SIB4}.hom.recode.vcf ${SIB4}.hom.vcf
+				less ${SIB4}.hom.vcf | grep -v "#" > ${SIB4}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB4}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --exclude ${SIB4}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+				fi
+			if [ -e ../${SIB1AFF}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB1AFF} as AFFECTED sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB1AFF}.vcf --non-ref-ac 2 --max-non-ref-ac 2 --recode --out ${SIB1AFF}.hom > /dev/null 2>&1
+				mv ${SIB1AFF}.hom.recode.vcf ${SIB1AFF}.hom.vcf
+				less ${SIB1AFF}.hom.vcf | grep -v "#" > ${SIB1AFF}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB1AFF}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --snps ${SIB1AFF}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${SIB2AFF}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB2AFF} as AFFECTED sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB2AFF}.vcf --non-ref-ac 2 --max-non-ref-ac 2 --recode --out ${SIB2AFF}.hom > /dev/null 2>&1
+				mv ${SIB2AFF}.hom.recode.vcf ${SIB2AFF}.hom.vcf
+				less ${SIB2AFF}.hom.vcf | grep -v "#" > ${SIB2AFF}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB2AFF}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --snps ${SIB2AFF}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${SIB3AFF}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB3AFF} as AFFECTED sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB3AFF}.vcf --non-ref-ac 2 --max-non-ref-ac 2 --recode --out ${SIB3AFF}.hom > /dev/null 2>&1
+				mv ${SIB3AFF}.hom.recode.vcf ${SIB3AFF}.hom.vcf
+				less ${SIB3AFF}.hom.vcf | grep -v "#" > ${SIB3AFF}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB3AFF}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --snps ${SIB3AFF}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${SIB4AFF}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB4AFF} as AFFECTED sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB4AFF}.vcf --non-ref-ac 2 --max-non-ref-ac 2 --recode --out ${SIB4AFF}.hom > /dev/null 2>&1
+				mv ${SIB4AFF}.hom.recode.vcf ${SIB4AFF}.hom.vcf
+				less ${SIB4AFF}.hom.vcf | grep -v "#" > ${SIB4AFF}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB4AFF}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --snps ${SIB4AFF}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			vcftools --vcf ${TARGET}.Analysis.vcf --non-ref-ac 2 --max-non-ref-ac 2 --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+			mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+		fi
+		## Dominant model variant prunning
+		if [ ${MODEL} = 'dominant' ]; then
+			echo -e `date +[%D-%R]` "\tThe model is ${MODEL}" | tee -a ../${TARGET}.log
+			if [ -e ../${SIB1}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB1} as unaffected sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB1}.vcf --non-ref-ac 1 --max-non-ref-ac 2 --recode --out ${SIB1}.hom > /dev/null 2>&1
+				mv ${SIB1}.hom.recode.vcf ${SIB1}.hom.vcf
+				less ${SIB1}.hom.vcf | grep -v "#" > ${SIB1}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB1}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --exclude ${SIB1}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${SIB2}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB2} as unaffected sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB2}.vcf --non-ref-ac 1 --max-non-ref-ac 2 --recode --out ${SIB2}.hom > /dev/null 2>&1
+				mv ${SIB2}.hom.recode.vcf ${SIB2}.hom.vcf
+				less ${SIB2}.hom.vcf | grep -v "#" > ${SIB2}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB2}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --exclude ${SIB2}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${SIB3}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB3} as unaffected sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB3}.vcf --non-ref-ac 1 --max-non-ref-ac 2 --recode --out ${SIB3}.hom > /dev/null 2>&1
+				mv ${SIB3}.hom.recode.vcf ${SIB3}.hom.vcf
+				less ${SIB3}.hom.vcf | grep -v "#" > ${SIB3}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB3}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --exclude ${SIB3}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${SIB4}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB4} as unaffected sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB4}.vcf --non-ref-ac 1 --max-non-ref-ac 2 --recode --out ${SIB4}.hom > /dev/null 2>&1
+				mv ${SIB4}.hom.recode.vcf ${SIB4}.hom.vcf
+				less ${SIB4}.hom.vcf | grep -v "#" > ${SIB4}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB4}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --exclude ${SIB4}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${SIB1AFF}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB1AFF} as AFFECTED sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB1AFF}.vcf --non-ref-ac 1 --max-non-ref-ac 2 --recode --out ${SIB1AFF}.hom > /dev/null 2>&1
+				mv ${SIB1AFF}.hom.recode.vcf ${SIB1AFF}.hom.vcf
+				less ${SIB1AFF}.hom.vcf | grep -v "#" > ${SIB1AFF}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB1AFF}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --snps ${SIB1AFF}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${SIB2AFF}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB2AFF} as AFFECTED sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB2AFF}.vcf --non-ref-ac 1 --max-non-ref-ac 2 --recode --out ${SIB2AFF}.hom > /dev/null 2>&1
+				mv ${SIB2AFF}.hom.recode.vcf ${SIB2AFF}.hom.vcf
+				less ${SIB2AFF}.hom.vcf | grep -v "#" > ${SIB2AFF}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB2AFF}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --snps ${SIB2AFF}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${SIB3AFF}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB3AFF} as AFFECTED sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB3AFF}.vcf --non-ref-ac 1 --max-non-ref-ac 2 --recode --out ${SIB3AFF}.hom > /dev/null 2>&1
+				mv ${SIB3AFF}.hom.recode.vcf ${SIB3AFF}.hom.vcf
+				less ${SIB3AFF}.hom.vcf | grep -v "#" > ${SIB3AFF}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB3AFF}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --snps ${SIB3AFF}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${SIB4AFF}.vcf  ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${SIB4AFF} as AFFECTED sibling" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${SIB4AFF}.vcf --non-ref-ac 1 --max-non-ref-ac 2 --recode --out ${SIB4AFF}.hom > /dev/null 2>&1
+				mv ${SIB4AFF}.hom.recode.vcf ${SIB4AFF}.hom.vcf
+				less ${SIB4AFF}.hom.vcf | grep -v "#" > ${SIB4AFF}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${SIB4AFF}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --snps ${SIB4AFF}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			vcftools --vcf ${TARGET}.Analysis.vcf --non-ref-ac 1 --max-non-ref-ac 2 --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+			mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf 
+		fi
+		## Not prunning any variants at all
+		if [ ${MODEL} = 'all' ]; then
+				echo -e `date +[%D-%R]` "\tThe model is ${MODEL}" | tee -a ../${TARGET}.log
+		fi
+		if [ ${MODEL} = 'maternal' ]; then
+			echo -e `date +[%D-%R]` "\tThe model is ${MODEL}" | tee -a ../${TARGET}.log
+			if [ -e ../${MOTHER}.vcf ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${MOTHER} as UNAFFECTED mother" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${MOTHER}.vcf --non-ref-ac 1 --max-non-ref-ac 2 --recode --out ${MOTHER}.hom > /dev/null 2>&1
+				mv ${MOTHER}.hom.recode.vcf ${MOTHER}.hom.vcf
+				less ${MOTHER}.hom.vcf | grep -v "#" > ${MOTHER}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${MOTHER}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --snps ${MOTHER}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${FATHER}.vcf ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${FATHER} as UNAFFECTED father" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${FATHER}.vcf --non-ref-ac 0 --max-non-ref-ac 0 --recode --out ${FATHER}.hom > /dev/null 2>&1
+				mv ${FATHER}.hom.recode.vcf ${FATHER}.hom.vcf
+				less ${FATHER}.hom.vcf | grep -v "#" > ${FATHER}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${FATHER}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --snps ${FATHER}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			vcftools --vcf ${TARGET}.Analysis.vcf --non-ref-ac 0 --max-non-ref-ac 1 --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+			mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf 
+		fi
+		if [ ${MODEL} = 'paternal' ]; then
+			echo -e `date +[%D-%R]` "\tThe model is ${MODEL}" | tee -a ../${TARGET}.log
+			if [ -e ../${MOTHER}.vcf ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${MOTHER} as UNAFFECTED mother" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${MOTHER}.vcf --non-ref-ac 0 --max-non-ref-ac 0 --recode --out ${MOTHER}.hom > /dev/null 2>&1
+				mv ${MOTHER}.hom.recode.vcf ${MOTHER}.hom.vcf
+				less ${MOTHER}.hom.vcf | grep -v "#" > ${MOTHER}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${MOTHER}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --snps ${MOTHER}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			if [ -e ../${FATHER}.vcf ]; then
+				echo -e `date +[%D-%R]` "\tUsing ${FATHER} as UNAFFECTED father" | tee -a ../${TARGET}.log
+				vcftools --vcf ../${FATHER}.vcf --non-ref-ac 1 --max-non-ref-ac 2 --recode --out ${FATHER}.hom > /dev/null 2>&1
+				mv ${FATHER}.hom.recode.vcf ${FATHER}.hom.vcf
+				less ${FATHER}.hom.vcf | grep -v "#" > ${FATHER}.hom.list
+				vim -c "%s/\S\+\s\+\S\+\s\+\(\S\+\).\+/\1/e|wq" ${FATHER}.hom.list > /dev/null 2>&1
+				vcftools --vcf ${TARGET}.Analysis.vcf --snps ${FATHER}.hom.list --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+				mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf
+			fi
+			vcftools --vcf ${TARGET}.Analysis.vcf --non-ref-ac 0 --max-non-ref-ac 1 --recode --out ${TARGET}.Analysis > /dev/null 2>&1
+			mv ${TARGET}.Analysis.recode.vcf ${TARGET}.Analysis.vcf 
+		fi
+		## Check a vcf file for annotation exists at this point
+		if [ ! -e ${TARGET}.Analysis.vcf ]; then
+			echo -e `date +[%D-%R]` "\tSomething went wrong, probably the genetic model you specified is not correct or not supported" | tee -a ../${TARGET}.log
+			exit
+		fi
+		## Prepare the correction values based on multimapping not handheld by the alt contig aware process
+        if [ -e ../${BAM}.bam ] && [ ${MULTIMAPS} = 'true' ]; then
+            echo -e `date +[%D-%R]` "\tCalculating multimap corrections" | tee -a ../${TARGET}.log
+            grep -v \# ${TARGET}.Analysis.vcf > ${TARGET}.variants
+            sed -i -e "s/\(\S\+\s\+\S\+\s\+\S\+\).\+/\1/" ${TARGET}.variants
+            IFS=$'\n'
+            echo -e "POS\tTOTAL\tXAPA" > ${TARGET}.XAcorrect
+            for i in `cat ${TARGET}.variants`; do
+                CHR=`echo ${i} | awk '{ print $1 }'`
+                BP=`echo ${i} | awk '{ print $2 }'`
+                SNP=`echo ${i} | awk '{ print $3 }'`
+                TOTALREADS=`samtools view ../${BAM}.bam "${CHR}:${BP}-${BP}" 2> /dev/null | wc -l`
+                XAPAREADS=`samtools view ../${BAM}.bam "${CHR}:${BP}-${BP}" 2> /dev/null | grep XA: | grep -v pa: | grep "[;:]chr[0-9]*," | wc -l`
+                echo -e "${CHR}_${BP}\t${TOTALREADS}\t${XAPAREADS}" >> ${TARGET}.XAcorrect
+            done
+        else
+            echo -e "POS\tTOTAL\tXAPA" > ${TARGET}.XAcorrect
+        fi
+		## Annotation
+		echo -e `date +[%D-%R]` "\tAnnotating" | tee -a ../${TARGET}.log
+        /data/Resources/Software/annovar/table_annovar.pl ${TARGET}.Analysis.vcf /data/Resources/Software/annovar/humandb/ -buildver ${BUILD} -out ${TARGET} -remove -protocol refGene,cytoBand,genomicSuperDups,esp6500siv2_all,esp6500siv2_aa,esp6500siv2_ea,1000g2015aug_all,1000g2015aug_afr,1000g2015aug_eas,1000g2015aug_amr,1000g2015aug_eur,1000g2015aug_sas,exac03,exac03nontcga,avsnp150,dbnsfp35a,clinvar_20180603,cosmic87,nci60,dbscsnv11,dbnsfp31a_interpro,gnomad_genome,intervar_20180118 -operation g,r,r,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f -nastring . -otherinfo -vcfinput --argument '-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs' > /dev/null 2>&1
+        FORMAT=`cut -f 167 ${TARGET}.${BUILD}_multianno.txt | tail -n1`
+        sed -i -e "s/${FORMAT}\t\(\S\+\)/\1/" ${TARGET}.${BUILD}_multianno.txt
+        sed -i -e "1s/\(.\+\)/\1\tQ\tDepth\tChr2\tBP2\trsID2\tA12\tA22\tQ2\tFILTER2\tINFO2\t${FORMAT}/" ${TARGET}.${BUILD}_multianno.txt
+        awk -F"\t" '{OFS="\t"; gsub(":","\t",$167)}1' ${TARGET}.${BUILD}_multianno.txt > ${TARGET}.${BUILD}_multianno.txt2
+        mv ${TARGET}.${BUILD}_multianno.txt2 ${TARGET}.${BUILD}_multianno.txt
+        ## Processing (or not) of the alternative isoform for each gene
+        if [ ${TRANSCRIPTS} = 'true' ]; then
+            echo -e `date +[%D-%R]` "\tProcessing all alternative transcripts of each gene" | tee -a ../${TARGET}.log
+            awk 'BEGIN { FS="[\t]+" } ; { print $1"_"$2"_"$3"_"$4"_"$5"\t"$10}' ${TARGET}.${BUILD}_multianno.txt > ${TARGET}.Transcripts.txt 2>&1
+            sed -i -e "/\t\./d" ${TARGET}.Transcripts.txt
+            sed -i -e "/\tUNKNOWN/d" ${TARGET}.Transcripts.txt
+            for k in {1..100..1}; do
+                sed -i -e "s/\(\S\+\)\t\(\S\+\),\(\S\+\)/\1\t\2\n\1\t\3/" ${TARGET}.Transcripts.txt
+            done
+            sed -i -e "s/:/\t/g" ${TARGET}.Transcripts.txt
+            awk -F '\t' '{ print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5 "\t" $6 "\t" $5 "\t" $6 "\t" $6 "\t" $6}' ${TARGET}.Transcripts.txt > kk && mv kk ${TARGET}.Transcripts.txt
+            awk -F '\t' 'BEGIN { OFS="\t" } { sub( "c." , "" , $7 ) }1' ${TARGET}.Transcripts.txt | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "p." , "" , $8 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "p." , "" , $9 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "p." , "" , $10 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "ins[[:alpha:]]+" , "" , $7 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "del" , "" , $7 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:alpha:]]+[[:punct:]]+[[:alpha:]]+" , "" , $7 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "dup[[:alpha:]]+" , "" , $7 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "delins" , "" , $8 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "del" , "" , $8 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:alpha:]]+" , "" , $8 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:alpha:]]+" , "" , $8 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:alpha:]]+" , "" , $8 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "delins" , "" , $9 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:digit:]]+[[:punct:]]+[[:digit:]]+del" , "-" , $9 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:digit:]]+[[:alpha:]]+" , "" , $9 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:digit:]]+[[:punct:]]+[[:alpha:]]+" , "" , $9 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "delins" , "" , $10 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:digit:]]+[[:punct:]]+[[:digit:]]+del" , "-" , $10 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:alpha:]]+[[:digit:]]+" , "" , $10 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:punct:]]+" , "" , $10 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:alpha:]]+[[:digit:]]+" , "" , $10 ) }1' | sed -e "s/\t-\t/\t-\t-\t/g" > kk && mv kk ${TARGET}.Transcripts.txt
+            sed -i -e "1s/.\+/Chr_Start_End_Ref_Alt\tGeneTr\tTranscriptID\tExon\tHGVS_cDNA\tHGVS_Prot\tCDS_Pos\tAA_Pos\tAA1\tAA2/" ${TARGET}.Transcripts.txt
+        else
+            echo -e `date +[%D-%R]` "\tNo longer supported" | tee -a ../${TARGET}.log     
+            exit
+        fi
+        ## Include OncoKB annoattions
+        sed -i -e "1s/\(.\+\)/\1\tGeneDeleteMe\tAlteration\tOncogenicity\tMutation_CancerEffect\tPMIDs\tGene_Cancer_Role/" ${TARGET}.Transcripts.txt
+        head -n1 ${TARGET}.Transcripts.txt > ${TARGET}.Transcripts.txt2
+        for i in `tail -n+2 ${TARGET}.Transcripts.txt`; do
+            GENE=`echo ${i} | awk -F '\t' '{ print $2 }'`
+            AAPOS=`echo ${i} | awk -F '\t' '{ print $8 }'`
+            AA1=`echo ${i} | awk -F '\t' '{ print $9 }'`
+            AA2=`echo ${i} | awk -F '\t' '{ print $10 }'`
+            AA=`echo -e "${AA1}${AAPOS}${AA2}"`
+            echo -n -e "${i}\t"
+            PRESENT=`grep ${GENE} /data/Resources/Software/annovar/humandb/oncoKB/oncoKB.txt | grep -e "${AA}" | wc -l`
+            if [ ${PRESENT} == 0 ]; then
+                echo -e ".\t.\t.\t.\t.\t."
+            else
+                grep ${GENE} /data/Resources/Software/annovar/humandb/oncoKB/oncoKB.txt | grep -e "${AA}"
+            fi
+        done >> ${TARGET}.Transcripts.txt2
+        mv ${TARGET}.Transcripts.txt2 ${TARGET}.Transcripts.txt
+        ## Include Civic annotations
+        sed -i -e "1s/\(.\+\)/\1\tcivic_variant_id\tcivic_gene\tcivic_variant\tcivic_score/" ${TARGET}.Transcripts.txt
+        head -n1 ${TARGET}.Transcripts.txt > ${TARGET}.Transcripts.txt2
+        for i in `tail -n+2 ${TARGET}.Transcripts.txt`; do
+            GENE=`echo ${i} | awk -F '\t' '{ print $2 }'`
+            AAPOS=`echo ${i} | awk -F '\t' '{ print $8 }'`
+            AA1=`echo ${i} | awk -F '\t' '{ print $9 }'`
+            AA2=`echo ${i} | awk -F '\t' '{ print $10 }'`
+            AA=`echo -e "${AA1}${AAPOS}${AA2}"`
+            echo -n -e "${i}\t"
+            PRESENT=`grep ${GENE} /data/Resources/Software/annovar/humandb/civic/civic.txt | grep -e "${AA}" | wc -l`
+            if [ ${PRESENT} == 0 ]; then
+                echo -e ".\t.\t.\t."
+            else
+                grep ${GENE} /data/Resources/Software/annovar/humandb/civic/civic.txt | grep -e "${AA}"
+            fi
+        done >> ${TARGET}.Transcripts.txt2
+        mv ${TARGET}.Transcripts.txt2 ${TARGET}.Transcripts.txt
+        sed -i -e "s/\t\+/\t/g" ${TARGET}.Transcripts.txt
+        ## Scoring and Prioritizing
+        echo -e `date +[%D-%R]` "\tProcessing the annotated file and calculating BASS scores" | tee -a ../${TARGET}.log
+        Rscript /data/Resources/Software/ceberSUITE/BASS/Scores.R ${TARGET}.${BUILD}_multianno.txt ${TARGET}.homozygous.txt ${MAFFILTER} ${TARGET}.Transcripts.txt ${TARGET}.XAcorrect 2> /dev/null
+        sed -i -e "1s/Oncogenicity/oncoKB_oncogenicity/" Scores.txt
+        sed -i -e "1s/Mutation_CancerEffect/oncoKB_effect/" Scores.txt
+        sed -i -e "1s/PMIDs/oncoKB_PMIDs/" Scores.txt
+        sed -i -e "1s/Gene_Cancer_Role/oncoKB_geneRole/" Scores.txt
+        sed -i -e "1s/InterVar_automated/InterVar/" Scores.txt
+        if [ -e Scores.txt ]; then
+            mv Scores.txt ../${TARGET}.scores.txt
+        fi
+        if [ -e ${TARGET}.hom.untouched ]; then
+            mv ${TARGET}.hom.untouched ../${TARGET}.hom
+        fi
+        echo -e `date +[%D-%R]` "\tDeleting temporal files" | tee -a ../${TARGET}.log
+        cd ../
+        rm -r .Score_${TARGET}_TempFiles
+		echo -e `date +[%D-%R]` "\tAll done, have a nice day!" | tee -a ${TARGET}.log
+	fi
+	if [ ${MODE} = "gwas" ]; then
+		echo -e "This mode is not enabled at this time"
+#		cp ../${TARGET}.assoc ${TARGET}.Analysis.avinput
+#		sed -i -e "s/\s\+/\t/g" ${TARGET}.Analysis.avinput
+#		sed -i -e "s/\t//" ${TARGET}.Analysis.avinput
+#		sed -i -e "s/\(\S\+\)\s\+\(\S\+\)\s\+\(\S\+\)\s\+\(\S\+\)\s\+\(\S\+\s\+\S\+\)\s\+\(\S\+\)/\1\t\3\t\3\t\4\t\6\t\2\t\5/" ${TARGET}.Analysis.avinput
+#		sed -i -e "1d" ${TARGET}.Analysis.avinput
+#		/data/Resources/Software/annovar/table_annovar.pl ${TARGET}.Analysis.avinput /data/Resources/Software/annovar/humandb/ -buildver ${BUILD} -out ${TARGET} -remove -protocol refGene,cytoBand,g#enomicSuperDups,esp6500siv2_all,esp6500siv2_aa,esp6500siv2_ea,1000g2015aug_all,1000g2015aug_afr,1000g2015aug_eas,1000g2015aug_amr,1000g2015aug_eur,1000g2015aug_sas,exac03,avsnp144,dbnsfp30a,cl#invar_20160302,cosmic70,nci60,dbscsnv11,spidex,dbnsfp31a_interpro -operation g,r,r,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f -nastring . -otherinfo > /dev/null 2>&1
+#		sed -i -e "1s/\(.\+\)/\1\tFreqCases\tFreqControls\tCHISQ\tP\tOR\tSE\tL95\tU95/" ${TARGET}.${BUILD}_multianno.txt
+#		sed -i -e "s/\t*$//" ${TARGET}.${BUILD}_multianno.txt
+#		awk 'BEGIN { FS="[\t]+" } ; { print $1"_"$2"_"$3"_"$4"_"$5"\t"$10}' ${TARGET}.${BUILD}_multianno.txt > ${TARGET}.Transcripts.txt 2>&1
+#		sed -i -e "/\t\./d" ${TARGET}.Transcripts.txt
+#		sed -i -e "/\tUNKNOWN/d" ${TARGET}.Transcripts.txt
+#		for k in {1..100..1}; do
+#			sed -i -e "s/\(\S\+\)\t\(\S\+\),\(\S\+\)/\1\t\2\n\1\t\3/" ${TARGET}.Transcripts.txt
+#		done
+#		sed -i -e "s/:/\t/g" ${TARGET}.Transcripts.txt
+#		sed -i -e "s/\tc\.[^0-9]\+\([0-9]\+\)[^0-9]\+\t/\t\1\t/" ${TARGET}.Transcripts.txt
+#		sed -i -e "s/\tc\.\(\S\+\)del\S*\t/\t\1\t/" ${TARGET}.Transcripts.txt
+#		sed -i -e "s/\tc\.\(\S\+\)dup\S*\t/\t\1\t/" ${TARGET}.Transcripts.txt
+#		sed -i -e "s/\tc\.\(\S\+\)ins\S*\t/\t\1\t/" ${TARGET}.Transcripts.txt
+#		sed -i -e "s/\tc\.\(\S\+\)delins\(\S\+\)/\t\1\tdelins\t\2/" ${TARGET}.Transcripts.txt
+#		sed -i -e "s/wholegene/1\t1/" ${TARGET}.Transcripts.txt
+#		sed -i -e "s/\tp\.\([^0-9]\+\)\([0-9]\+\)delins\([^0-9]\+\)/\t\2\t\1\t\3/" ${TARGET}.Transcripts.txt
+#		sed -i -e "s/\tp\.\([^0-9]\+\)\([0-9]\+\)\S\+delins\([^0-9]\+\)/\t\2\t\1\t\3/" ${TARGET}.Transcripts.txt
+#		sed -i -e "s/\tp\.\(\S\+\)del/\t\1\tdel\tdel/" ${TARGET}.Transcripts.txt
+#		sed -i -e "s/\tp\.\([^0-9]\+\)\([0-9]\+\)\([^0-9]\+\)/\t\2\t\1\t\3/" ${TARGET}.Transcripts.txt
+#		sed -i -e "s/\t\([0-9]\+\)_[0-9]\+\t/\t\1\t/" ${TARGET}.Transcripts.txt
+#		sed -i -e "s/\t\([0-9]\+\)_[0-9]\+\t/\t\1\t/" ${TARGET}.Transcripts.txt
+#		sed -i -e "1s/.\+/Chr_Start_End_Ref_Alt\tGeneTr\tTranscriptID\tExon\tCDS_Pos\tAA_Pos\tAA1\tAA2/" ${TARGET}.Transcripts.txt
+#		Rscript /data/Resources/Software/ceberSUITE/BASS/ScoresGWAS.R ${TARGET}.${BUILD}_multianno.txt ${TARGET}.Transcripts.txt 2> /dev/null
+#		if [ -e Scores.txt ]; then
+#			mv Scores.txt ../${TARGET}.scores.txt
+#		fi
+#		echo -e `date +[%D-%R]` "\tDeleting temporal files" | tee -a ../${TARGET}.log
+#		cd ../
+#		rm -r .Score_${TARGET}_TempFiles
+#		echo -e `date +[%D-%R]` "\tAll done, have a nice day!" | tee -a ${TARGET}.log
+	fi
+	if [ ${MODE} = "meta" ]; then
+		echo -e "This mode is not enabled at this time"
+#		TOTALINDV=`wc -l ../${TARGET}.list | awk '{ print $1 }'`
+#		echo -e `date +[%D-%R]` "\t${TOTALINDV} individuals selected for meta-analysis using a BASS score threshold of ${METASCORE}" | tee -a ../${TARGET}.log
+#		head -n1 ../`head -n1 ../${TARGET}.list`.scores.txt > all.scores.txt
+#		for i in `cat ../${TARGET}.list`; do
+#			awk -vMETASCORE="${METASCORE}" -F '\t' '{ if ($28 >= METASCORE ) print }' ../${i}.scores.txt | tail -n +2 > ${i}.scores.filter.txt
+#			cat ${i}.scores.filter.txt >> all.scores.txt
+#			sed -i -e "s/\(\S\+\)\s\+\(\S\+\)\s\+\(\S\+\)/\1_\2_\3\t\1\t\2\t\3/" ${i}.scores.filter.txt
+#			cut -d $'\t' -f 1,2,3,4,6,9 ${i}.scores.filter.txt | sort -u -k 1,1 > ${i}.scores.variants
+#			echo -ne "\r\033[KPeocessing samples ${i}"
+#		done
+#		echo -e "\r"
+#
+#		echo -e `date +[%D-%R]` "\tAll individuals processed" | tee -a ../${TARGET}.log
+#		awk -F '\t' '{ print $1"_"$2"_"$3"_"$15"\t"$0 }' all.scores.txt > all.scores.txt2
+#		mv all.scores.txt2 all.scores.txt
+#		(head -n1 all.scores.txt && tail -n +2 all.scores.txt | sort -u -k1,1 all.scores.txt) > all.scores.unique.txt
+#		cat *.variants > all.variants
+#		sort -u -k1,1 all.variants > all.variants.unique
+#		IFS=$'\n'
+#		cp ../${TARGET}.list vcfs
+#		sed -i -e "s/\(.\+\)/\.\.\/\1\.vcf/" vcfs
+#		echo -e "Pos\tChr\tStart\tEnd\tGene\tavsnp144\tVariantCounts\tVariantTotalCounts\tIndividuals" > all.variants.counts
+#		TOTALVARIANTS=`wc -l all.variants.unique | awk '{ print $1 }'`
+#		for i in `cat all.variants.unique`; do
+#			POS=`echo ${i} | awk '{ print $1 }'`
+#			CHR=`echo ${i} | awk '{ print $2 }'`
+#			BP=`echo ${i} | awk '{ print $3 }'`
+#			COUNTS=`grep -w ${POS} all.variants | wc -l`
+#			TOTALCOUNTS=$(grep -c -w `echo -e "${CHR}\t${BP}"` `cat vcfs` | grep :[1-9] | wc -l)
+#			if [ ${TOTALCOUNTS} -eq 0 ]; then
+#				let BP=BP-1
+#				TOTALCOUNTS=$(fgrep -c -w `echo -e "${CHR}\t${BP}"` `cat vcfs` | fgrep :[1-9] | wc -l)
+#				if [ ${TOTALCOUNTS} -eq 0 ]; then
+#					echo -e `date +[%D-%R]` "\tCould not count the totals for variant ${POS}" | tee -a ../${TARGET}.log
+#				fi
+#			fi
+#			INDWVAR=`fgrep -w ${POS} *.filter.txt | sed -e "s/:/\t/" | awk '{ print $1 }' | sed -e "s/\.scores\.filter\.txt//g" | sort -u | sed ':a;N;$!ba;s/\n/,/g'`
+#			echo -e "${i}\t${COUNTS}\t${TOTALCOUNTS}\t${INDWVAR}" >> all.variants.counts
+#			CURRENTVARIANTS=`wc -l all.variants.counts | awk '{ print $1 }'`
+#			let CURRENTVARIANTS=CURRENTVARIANTS-1
+#			echo -ne "\r\033[KProcessed ${CURRENTVARIANTS} of ${TOTALVARIANTS} variants"
+#		done
+#		echo -e "\r"
+#		awk -F '\t' '{ if ( $8 > 0 ) print }' all.variants.counts > all.variants.counts2
+#		mv all.variants.counts2 all.variants.counts
+#		echo -e "\r"
+#		echo -e `date +[%D-%R]` "\tAll variants processed" | tee -a ../${TARGET}.log
+#		
+#		sort -u -k 4,4 /data/Resources/BEDs/All_Genes_${REFERENCE}.bed > genesbed.bed
+#		cut -f 5 all.variants.counts | sort -u > all.genes.unique
+#		echo -e "Gene\tGeneCounts\tTotalGeneCounts\tIndividuals" > all.genes.counts
+#		TOTALGENES=`wc -l all.genes.unique | awk '{ print $1 }'`
+#		for i in `cat all.genes.unique`; do
+#			k=`fgrep -w ${i} genesbed.bed | head -n1`
+#			CHR=`echo ${k} | awk '{ print $1 }'`
+#			BP1=`echo ${k} | awk '{ print $2 }'`
+#			BP2=`echo ${k} | awk '{ print $3 }'`
+#			COUNTS=`fgrep -w ${i} all.variants.counts | awk '{print $9}' | tr , '\n' | sort -u | sed -e '/^\s*$/d' | wc -l`
+#			for j in `cat vcfs`; do
+#				j2=`echo ${j} | sed "s/\.\.\///"`
+#				(vcftools --vcf ${j} --chr chr${CHR} --from-bp ${BP1} --to-bp ${BP2} --recode --stdout | grep -v \# > ${j2}_${i}_todelete  &)
+#				sleep 0.02
+#			done
+#			TOTALCOUNTS=0
+#			for j in `cat vcfs`; do
+#				j2=`echo ${j} | sed "s/\.\.\///"`
+#				CURRENT=`wc -l ${j2}_${i}_todelete | awk '{ print $1 }'`
+#				if [ ${CURRENT} -gt 0 ]; then
+#					let TOTALCOUNTS=TOTALCOUNTS+1
+#				fi
+#			done
+#			rm *_todelete
+#			INDWVAR=`fgrep -w ${i} all.variants.counts | awk '{print $9}' | tr , '\n' | sort -u | sed -e '/^\s*$/d' | sed ':a;N;$!ba;s/\n/,/g'`
+#			echo -e "${i}\t${COUNTS}\t${TOTALCOUNTS}\t${INDWVAR}" >> all.genes.counts
+#			CURRENTGENES=`wc -l all.genes.counts | awk '{ print $1 }'`
+#			let CURRENTGENES=CURRENTGENES-1
+#			echo -ne "\r\033[KProcessed ${CURRENTGENES} of ${TOTALGENES} genes"
+#		done
+#		echo -e "\r"
+#		awk -F '\t' '{ if ( $3 > 0 ) print }' all.genes.counts > all.genes.counts2
+#		mv all.genes.counts2 all.genes.counts
+#		echo -e "\r"
+#		echo -e `date +[%D-%R]` "\tAll genes processed" | tee -a ../${TARGET}.log
+#
+#		echo -e `date +[%D-%R]` "\tCalculating metaScores" | tee -a ../${TARGET}.log
+#		Rscript /data/Resources/Software/ceberSUITE/BASS/ScoresMETA.R all.scores.unique.txt all.variants.counts all.genes.counts ${TOTALINDV} 2> /dev/null
+#		mv genes3.txt all.genes.counts
+#		if [ -e metaScores.txt ]; then
+#			cp metaScores.txt ../${TARGET}.metaScores.txt
+#			cp all.variants.counts ../${TARGET}.metaScores.variants.txt
+#			cp all.genes.counts ../${TARGET}.metaScores.genes.txt
+#		fi
+#		echo -e `date +[%D-%R]` "\tDeleting temporal files" | tee -a ../${TARGET}.log
+#		cd ../
+#		rm -r .Score_${TARGET}_TempFiles
+#		echo -e `date +[%D-%R]` "\tAll done, have a nice day!" | tee -a ${TARGET}.log
+	fi
+elif [ ${SOMATIC} = 'true' ]; then
+	SAMPLENAME=`echo ${TARGET} | sed -e "s/_${BUILD}.\+//"`
+	## all the somatic pipeline
+	cp ../${TARGET}.vcf ${TARGET}.Analysis.vcf
+	## Do multimap calculations on the bam file if it exists
+    if [ -e ../${BAM}.bam ]; then
+        echo -e `date +[%D-%R]` "\tCalculating multimap corrections" | tee -a ../${TARGET}.log
+        grep -v \# ${TARGET}.Analysis.vcf > ${TARGET}.variants
+        sed -i -e "s/\(\S\+\s\+\S\+\s\+\S\+\).\+/\1/" ${TARGET}.variants
+        IFS=$'\n'
+        echo -e "POS\tTOTAL\tXAPA" > ${TARGET}.XAcorrect
+        for i in `cat ${TARGET}.variants`; do
+            CHR=`echo ${i} | awk '{ print $1 }'`
+            BP=`echo ${i} | awk '{ print $2 }'`
+            SNP=`echo ${i} | awk '{ print $3 }'`
+            TOTALREADS=`samtools view ../${BAM}.bam "${CHR}:${BP}-${BP}" 2> /dev/null | wc -l`
+            XAPAREADS=`samtools view ../${BAM}.bam "${CHR}:${BP}-${BP}" 2> /dev/null | grep XA: | grep -v pa: | grep "[;:]chr[0-9]*," | wc -l`
+            echo -e "${CHR}_${BP}\t${TOTALREADS}\t${XAPAREADS}" >> ${TARGET}.XAcorrect
+        done
+    else
+        echo -e "POS\tTOTAL\tXAPA" > ${TARGET}.XAcorrect
+    fi
+	echo -e `date +[%D-%R]` "\tAnnotating" | tee -a ../${TARGET}.log
+    if [ `grep \# ${TARGET}.Analysis.vcf | grep -v \#\# | wc -w` == 11 ];  then
+        SAMPLE1INVCF=`grep \# ${TARGET}.Analysis.vcf | grep -v \#\# | awk -F '\t' '{ print $10 }'`
+        SAMPLE2INVCF=`grep \# ${TARGET}.Analysis.vcf | grep -v \#\# | awk -F '\t' '{ print $11 }'`
+        if [ ${SAMPLE1INVCF} = ${SAMPLENAME} ]; then
+            ( grep \#\# ${TARGET}.Analysis.vcf && grep -v \#\# ${TARGET}.Analysis.vcf | cut -f 1,2,3,4,5,6,7,8,9,10 ) > kk.vcf
+            mv kk.vcf ${TARGET}.Analysis.vcf
+        elif [ ${SAMPLE2INVCF} = ${SAMPLENAME} ]; then
+            ( grep \#\# ${TARGET}.Analysis.vcf && grep -v \#\# ${TARGET}.Analysis.vcf | cut -f 1,2,3,4,5,6,7,8,9,11 ) > kk.vcf
+            mv kk.vcf ${TARGET}.Analysis.vcf
+        else
+            echo "Something went terribly wrong"
+            exit
+        fi
+    elif [ `grep \# ${TARGET}.Analysis.vcf | grep -v \#\# | wc -w` == 10 ];  then
+        sleep 1
+    else
+        echo "Something went terribly wrong"
+        exit		
+    fi
+	/data/Resources/Software/annovar/table_annovar.pl ${TARGET}.Analysis.vcf /data/Resources/Software/annovar/humandb/ -buildver ${BUILD} -out ${TARGET} -remove -protocol refGene,cytoBand,genomicSuperDups,esp6500siv2_all,esp6500siv2_aa,esp6500siv2_ea,1000g2015aug_all,1000g2015aug_afr,1000g2015aug_eas,1000g2015aug_amr,1000g2015aug_eur,1000g2015aug_sas,exac03,exac03nontcga,avsnp150,dbnsfp35a,clinvar_20180603,cosmic87,nci60,dbscsnv11,dbnsfp31a_interpro,gnomad_genome,intervar_20180118 -operation g,r,r,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f -nastring . -otherinfo -vcfinput --argument '-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs' > /dev/null 2>&1
+	FORMAT=`cut -f 167 ${TARGET}.${BUILD}_multianno.txt | tail -n1`
+	sed -i -e "1s/\(.\+\)/\1\tQ\tDepthTumour\tChr2\tBP2\trsID2\tA12\tA22\tQ2\tFILTER\tINFO\t${FORMAT}/" ${TARGET}.${BUILD}_multianno.txt
+	sed -i -e "s/${FORMAT}\t\(\S\+\)/\1/" ${TARGET}.${BUILD}_multianno.txt
+	awk -F"\t" '{OFS="\t"; gsub(":","\t",$167)}1' ${TARGET}.${BUILD}_multianno.txt > temp && mv temp ${TARGET}.${BUILD}_multianno.txt
+	
+	## Transcript processing
+	echo -e `date +[%D-%R]` "\tProcessing all alternative transcripts of each gene" | tee -a ../${TARGET}.log
+	awk 'BEGIN { FS="[\t]+" } ; { print $1"_"$2"_"$3"_"$4"_"$5"\t"$10}' ${TARGET}.${BUILD}_multianno.txt > ${TARGET}.Transcripts.txt 2>&1
+	sed -i -e "/\t\./d" ${TARGET}.Transcripts.txt
+	sed -i -e "/\tUNKNOWN/d" ${TARGET}.Transcripts.txt
+	for k in {1..100..1}; do
+        sed -i -e "s/\(\S\+\)\t\(\S\+\),\(\S\+\)/\1\t\2\n\1\t\3/" ${TARGET}.Transcripts.txt
+	done
+	sed -i -e "s/:/\t/g" ${TARGET}.Transcripts.txt
+	awk -F '\t' '{ print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5 "\t" $6 "\t" $5 "\t" $6 "\t" $6 "\t" $6}' ${TARGET}.Transcripts.txt > kk && mv kk ${TARGET}.Transcripts.txt
+	awk -F '\t' 'BEGIN { OFS="\t" } { sub( "c." , "" , $7 ) }1' ${TARGET}.Transcripts.txt | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "p." , "" , $8 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "p." , "" , $9 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "p." , "" , $10 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "ins[[:alpha:]]+" , "" , $7 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "del" , "" , $7 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:alpha:]]+[[:punct:]]+[[:alpha:]]+" , "" , $7 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "dup[[:alpha:]]+" , "" , $7 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "delins" , "" , $8 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "del" , "" , $8 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:alpha:]]+" , "" , $8 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:alpha:]]+" , "" , $8 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:alpha:]]+" , "" , $8 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "delins" , "" , $9 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:digit:]]+[[:punct:]]+[[:digit:]]+del" , "-" , $9 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:digit:]]+[[:alpha:]]+" , "" , $9 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:digit:]]+[[:punct:]]+[[:alpha:]]+" , "" , $9 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "delins" , "" , $10 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:digit:]]+[[:punct:]]+[[:digit:]]+del" , "-" , $10 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:alpha:]]+[[:digit:]]+" , "" , $10 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:punct:]]+" , "" , $10 ) }1' | awk -F '\t' 'BEGIN { OFS="\t" } { sub( "[[:alpha:]]+[[:digit:]]+" , "" , $10 ) }1' | sed -e "s/\t-\t/\t-\t-\t/g" > kk && mv kk ${TARGET}.Transcripts.txt
+	sed -i -e "1s/.\+/Chr_Start_End_Ref_Alt\tGeneTr\tTranscriptID\tExon\tHGVS_cDNA\tHGVS_Prot\tCDS_Pos\tAA_Pos\tAA1\tAA2/" ${TARGET}.Transcripts.txt
+		
+	## Include OncoKB annoattions
+    sed -i -e "1s/\(.\+\)/\1\tGeneDeleteMe\tAlteration\tOncogenicity\tMutation_CancerEffect\tPMIDs\tGene_Cancer_Role/" ${TARGET}.Transcripts.txt
+    head -n1 ${TARGET}.Transcripts.txt > ${TARGET}.Transcripts.txt2
+    for i in `tail -n+2 ${TARGET}.Transcripts.txt`; do
+        GENE=`echo ${i} | awk -F '\t' '{ print $2 }'`
+        AAPOS=`echo ${i} | awk -F '\t' '{ print $8 }'`
+        AA1=`echo ${i} | awk -F '\t' '{ print $9 }'`
+        AA2=`echo ${i} | awk -F '\t' '{ print $10 }'`
+        AA=`echo -e "${AA1}${AAPOS}${AA2}"`
+        echo -n -e "${i}\t"
+        PRESENT=`grep ${GENE} /data/Resources/Software/annovar/humandb/oncoKB/oncoKB.txt | grep -e "${AA}" | wc -l`
+        if [ ${PRESENT} == 0 ]; then
+            echo -e ".\t.\t.\t.\t.\t."
+        else
+            grep ${GENE} /data/Resources/Software/annovar/humandb/oncoKB/oncoKB.txt | grep -e "${AA}"
+        fi
+    done >> ${TARGET}.Transcripts.txt2
+	mv ${TARGET}.Transcripts.txt2 ${TARGET}.Transcripts.txt
+	## Include Civic annotations
+    sed -i -e "1s/\(.\+\)/\1\tcivic_variant_id\tcivic_gene\tcivic_variant\tcivic_score/" ${TARGET}.Transcripts.txt
+    head -n1 ${TARGET}.Transcripts.txt > ${TARGET}.Transcripts.txt2
+    for i in `tail -n+2 ${TARGET}.Transcripts.txt`; do
+        GENE=`echo ${i} | awk -F '\t' '{ print $2 }'`
+        AAPOS=`echo ${i} | awk -F '\t' '{ print $8 }'`
+        AA1=`echo ${i} | awk -F '\t' '{ print $9 }'`
+        AA2=`echo ${i} | awk -F '\t' '{ print $10 }'`
+        AA=`echo -e "${AA1}${AAPOS}${AA2}"`
+        echo -n -e "${i}\t"
+        PRESENT=`grep ${GENE} /data/Resources/Software/annovar/humandb/civic/civic.txt | grep -e "${AA}" | wc -l`
+        if [ ${PRESENT} == 0 ]; then
+            echo -e ".\t.\t.\t."
+        else
+            grep ${GENE} /data/Resources/Software/annovar/humandb/civic/civic.txt | grep -e "${AA}"
+        fi
+    done >> ${TARGET}.Transcripts.txt2
+	mv ${TARGET}.Transcripts.txt2 ${TARGET}.Transcripts.txt
+	sed -i -e "s/\t\+/\t/g" ${TARGET}.Transcripts.txt
+
+	# Go to R do calculations and sort all the shit
+	Rscript /data/Resources/Software/ceberSUITE/BASS/ScoresSoma.R ${TARGET}.${BUILD}_multianno.txt ${TARGET}.Transcripts.txt ${TARGET}.XAcorrect 2> /dev/null
+	# Wrap up
+	sed -i -e "1s/Oncogenicity/oncoKB_oncogenicity/" Scores.txt
+	sed -i -e "1s/Mutation_CancerEffect/oncoKB_effect/" Scores.txt
+	sed -i -e "1s/PMIDs/oncoKB_PMIDs/" Scores.txt
+	sed -i -e "1s/Gene_Cancer_Role/oncoKB_geneRole/" Scores.txt
+	sed -i -e "1s/InterVar_automated/InterVar/" Scores.txt
+	if [ -e Scores.txt ]; then
+		mv Scores.txt ../${TARGET}.scores.txt
+	fi
+	echo -e `date +[%D-%R]` "\tDeleting temporal files" | tee -a ../${TARGET}.log
+	cd ../
+	rm -r .Score_${TARGET}_TempFiles
+	echo -e `date +[%D-%R]` "\tAll done, have a nice day!" | tee -a ${TARGET}.log
+
+else
+	echo -e "\r"`date +%y%m%d\ %H%M%S\ %s` "     --somatic ${SOMATIC}: option not recognized" | tee -a ${LIST}.log
+	exit
+fi
